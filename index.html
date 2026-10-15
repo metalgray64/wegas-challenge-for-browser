@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Wega Challenge</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:"Comic Sans MS",Arial,sans-serif}
+  #backgroundGrid{position:fixed;inset:0;display:none;background-image:url('https://i.pinimg.com/736x/46/05/8e/46058ef1d5cb29ec65c1b11c39fbf9dd.jpg');background-size:10% 20%;background-repeat:repeat;z-index:0}
+  #backgroundGrid::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.36);pointer-events:none}
+  #gameCanvas{position:fixed;inset:0;width:100vw;height:100vh;display:none;z-index:1;cursor:crosshair}
+  #startScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:10;cursor:pointer;overflow:hidden}
+  #startImage{display:block;width:min(76vw,76vh,650px);height:min(76vw,76vh,650px);object-fit:contain;image-rendering:auto}
+  #startFallback{display:none;font-size:min(30vw,250px);line-height:1}
+  #pressSpace{position:absolute;left:0;right:0;bottom:9%;text-align:center;font-weight:900;font-size:clamp(22px,4vw,48px);color:#fff;animation:blink .8s steps(2,end) infinite;text-shadow:2px 2px #333;pointer-events:none}
+  @keyframes blink{50%{visibility:hidden}}
+  #hud{position:fixed;top:10px;left:12px;z-index:4;display:none;font-size:clamp(14px,1.8vw,20px);font-weight:900;text-shadow:2px 2px #000;pointer-events:none;line-height:1.45}
+  #toast{position:fixed;z-index:5;left:50%;top:18%;transform:translateX(-50%);display:none;text-align:center;font-size:clamp(24px,5vw,54px);font-weight:900;color:white;background:rgba(0,0,0,.45);padding:10px 18px;white-space:nowrap;pointer-events:none}
+  #loseOverlay,#winOverlay{position:fixed;inset:0;z-index:16;display:none;align-items:center;justify-content:center;background:#000;text-align:center;padding:24px}
+  .endLayout{display:flex;align-items:center;justify-content:center;gap:clamp(18px,4vw,54px);max-width:1100px;width:100%}
+  .endImage{width:min(38vw,42vh,360px);height:min(38vw,42vh,360px);object-fit:contain;flex:0 0 auto}
+  .endText{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+  #loseTitle{font-family:Impact,"Arial Black",sans-serif;font-size:clamp(38px,7.5vw,100px);font-weight:900;color:#ff2020;text-shadow:4px 4px #410000;letter-spacing:2px}
+  #losePrompt{margin-top:22px;color:#fff;font-size:clamp(17px,2.7vw,30px);animation:blink .8s steps(2,end) infinite;white-space:nowrap}
+  #winTitle{font-family:Impact,"Arial Black",sans-serif;font-size:clamp(40px,8vw,112px);font-weight:900;color:#ffe84a;text-shadow:5px 5px #714b00;letter-spacing:3px}
+  #winPrompt{margin-top:22px;color:#fff;font-size:clamp(17px,2.7vw,30px);animation:blink .8s steps(2,end) infinite;white-space:nowrap}
+  @media(max-width:620px){.endLayout{flex-direction:column;gap:12px}.endImage{width:min(48vw,28vh,220px);height:min(48vw,28vh,220px)}#loseTitle,#winTitle{font-size:clamp(38px,10vw,68px)}#losePrompt,#winPrompt{font-size:clamp(14px,4vw,21px);margin-top:14px}}
+  #help{position:fixed;right:12px;bottom:10px;z-index:4;display:none;color:#eee;font:bold 12px Arial,sans-serif;text-shadow:1px 1px #000;pointer-events:none;text-align:right}
+</style>
+</head>
+<body>
+<div id="backgroundGrid"></div>
+<canvas id="gameCanvas" aria-label="Wega Challenge"></canvas>
+<div id="startScreen" role="button" aria-label="Iniciar juego con espacio">
+  <img id="startImage" alt="Wega Jr" src="https://static.wikia.nocookie.net/wegas-madness/images/f/fc/Wega_Jr.png/revision/latest?cb=20260729110328">
+  <div id="startFallback">🟣</div>
+  <div id="pressSpace">PRESS SPACE</div>
+</div>
+<div id="hud"><div>WEGA DOLLS: <span id="dollCount">0</span> / 357</div><div id="statusText">WEGA IS WATCHING</div></div>
+<div id="toast"></div>
+<div id="loseOverlay"><div class="endLayout"><img class="endImage" alt="You Losega" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRRzhAj8RI48UVvi69kPxu5EPyweRh29GgFEGxcOQW-ug&amp;s=10"><div class="endText"><div id="loseTitle">YOU LOSEGA</div><div id="losePrompt">PRESS SPACE</div></div></div></div>
+<div id="winOverlay"><div class="endLayout"><img class="endImage" alt="You Winga" src="https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/9ae05931-4472-4837-b863-52f252232f58/dmpzych-5790cc90-1050-4d4a-8e6e-abf58c0a23e4.jpg/v1/fill/w_248,h_245,q_75,strp/term_2_holiday_school_is_back_by_goofyahhandika_dmpzych-fullview.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoiYXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwib2JqIjpbeyJoZWlnaHQiOiI8PTI0NSIsInBhdGgiOiIvZi85YWUwNTkzMS00NDcyLTQ4MzctYjg2My01MmYyNTIyMzJmNTgvZG1wenljaC01NzkwY2M5MC0xMDUwLTRkNGEtOGU2ZS1hYmY1OGMwYTIzZTQuanBnIiwid2lkdGgiOiI8PTI0OCJ9XX0.ODrGj9Cyvj_Td-44WIXpQg65fHxZVyFl9L7pR1lUODY"><div class="endText"><div id="winTitle">YOU WINGA</div><div id="winPrompt">PRESS SPACE</div></div></div></div>
+<audio id="wegaAudio" preload="auto" loop src="https://raw.githubusercontent.com/rafaelmoyanoriega-star/wegas-challenge-sounds/main/Wega%20Scream%20-%20Sound%20Effect%20(HD)%20-%20SFX%20Central.mp3"></audio>
+<audio id="rorysScreamAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Rorys_scream.mp3"></audio>
+<audio id="wegAlertAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Weg_alert.mp3"></audio>
+<audio id="maltigiScreamAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Maltscream.mp3"></audio>
+<audio id="maltigiPiggyAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Maltpiggy.mp3"></audio>
+<audio id="maltigiPingAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Pingtigi.mp3"></audio>
+<audio id="rorysBlinsAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Blins.mp3"></audio>
+<audio id="rorysGlitchAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Rorys_glitch.mp3"></audio>
+<audio id="rorysOhAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/Rorys_oh.mp3"></audio>
+<audio id="urioScreamAudio" preload="auto" loop src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/grito%20de%20urio.mp3"></audio>
+<audio id="wegaEnrageAudio" preload="auto" src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/dsadsaw.mp3"></audio>
+<audio id="gameMusicAudio" preload="auto" loop src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/WEXECUTION%20%28instrumental%29%20-%20icevault17.mp3"></audio>
+<audio id="winMusicAudio" preload="auto" loop src="https://raw.githubusercontent.com/metalgray64/wegas-challenge-sounds/main/You%20Winga_Bossa%20Me%20%20End%20Screen%20Theme%20-%20Wega%E2%80%99s%20Challenge_%20The%20Idol%20OST%20%28Fanmade%20Visualizer%29.mp3"></audio>
+<script>
+'use strict';
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  const startScreen = document.getElementById('startScreen');
+  const startImage = document.getElementById('startImage');
+  const startFallback = document.getElementById('startFallback');
+  const bg = document.getElementById('backgroundGrid');
+  const hud = document.getElementById('hud');
+  const countEl = document.getElementById('dollCount');
+  const statusEl = document.getElementById('statusText');
+  const toast = document.getElementById('toast');
+  const loseOverlay = document.getElementById('loseOverlay');
+  const winOverlay = document.getElementById('winOverlay');
+  const audio = document.getElementById('wegaAudio');
+  const rorysScreamAudio = document.getElementById('rorysScreamAudio');
+  const wegAlertAudio = document.getElementById('wegAlertAudio');
+  const maltigiScreamAudio = document.getElementById('maltigiScreamAudio');
+  const maltigiPiggyAudio = document.getElementById('maltigiPiggyAudio');
+  const maltigiPingAudio = document.getElementById('maltigiPingAudio');
+  const rorysBlinsAudio = document.getElementById('rorysBlinsAudio');
+  const rorysGlitchAudio = document.getElementById('rorysGlitchAudio');
+  const rorysOhAudio = document.getElementById('rorysOhAudio');
+  const urioScreamAudio = document.getElementById('urioScreamAudio');
+  const wegaEnrageAudio = document.getElementById('wegaEnrageAudio');
+  let roryEffectSoundActive = false;
+  let urioScreamPlayed = false;
+  const gameMusicAudio = document.getElementById('gameMusicAudio');
+  const winMusicAudio = document.getElementById('winMusicAudio');
+
+  function playSfx(sound, volume = 0.14) {
+    if (!sound) return;
+    try { sound.pause(); sound.currentTime = 0; sound.volume = volume; sound.play().catch(() => {}); } catch (_) {}
+  }
+
+  function playTimedSfx(sound, volume, maxDuration = 6000) {
+    playSfx(sound, volume);
+    if (!sound) return;
+    // Cortar el efecto a los seis segundos, aunque el archivo dure más.
+    window.setTimeout(() => { try { sound.pause(); sound.currentTime = 0; } catch (_) {} }, maxDuration);
+  }
+
+  const URLS = {
+    wega: 'https://static.wikia.nocookie.net/videogaming/images/1/16/Wega%27s_Challenge_-_Sprite_-_Wega_%28Thumbnail%29.png/revision/latest?cb=20260204010707',
+    wegaAngry: 'https://static.wikia.nocookie.net/the-recolor-gigaverse/images/4/4a/Enraged_Wega.webp/revision/latest?cb=20260603093835',
+    rorys: 'https://static.wikitide.net/wegaschallengethewegaversewiki/4/4b/SPRITE-Rorys.webp',
+    maltigi: 'https://static.wikia.nocookie.net/wegaschallenge-theidol/images/5/53/Maltigi.png/revision/latest/scale-to-width/360?cb=20250518195348',
+    maltigiRest: 'https://static.wikia.nocookie.net/wegaschallenge-theidol/images/9/91/Sadmaltigi.png/revision/latest?cb=20251007143614',
+    doll: 'https://static.wikia.nocookie.net/wegaschallenge-theidol/images/8/8c/Ludwigicon.png/revision/latest?cb=20260113151310',
+    cryingShoe: 'https://static.wikia.nocookie.net/wegaschallenge-theidol/images/f/f4/Cryingshoe.png/revision/latest?cb=20260114112230',
+    urio: 'https://static.wikia.nocookie.net/wegaschallenge-theidol/images/d/dd/Urio.png/revision/latest?cb=20260610110525'
+  };
+  const images = {};
+  for (const [name, src] of Object.entries(URLS)) {
+    const im = new Image();
+    im.onload = () => {
+      images[name] = im;
+      // Pre-tint only Cryingshoe purple. Keeping it on its own canvas prevents
+      // the tint from affecting Wega, Rorys, Maltigi, or the background.
+      if (name === 'cryingShoe') {
+        try {
+          const tinted = document.createElement('canvas');
+          tinted.width = im.naturalWidth;
+          tinted.height = im.naturalHeight;
+          const tintCtx = tinted.getContext('2d');
+          if (tintCtx) {
+            tintCtx.drawImage(im, 0, 0);
+            tintCtx.globalCompositeOperation = 'source-atop';
+            // Dark, saturated violet tint (not pale lavender).
+            tintCtx.fillStyle = 'rgba(43, 0, 92, 0.84)';
+            tintCtx.fillRect(0, 0, tinted.width, tinted.height);
+            tintCtx.globalCompositeOperation = 'source-over';
+            images.cryingShoePurple = tinted;
+          }
+        } catch (_) {
+          images.cryingShoePurple = null;
+        }
+      }
+    };
+    im.onerror = () => { images[name] = null; };
+    im.src = src;
+  }
+
+  let W = innerWidth, H = innerHeight;
+  let pixelRatio = 1;
+  let mode = 'title';
+  let lastTime = 0;
+  let totalCollected = 0;
+  let toastUntil = 0;
+  let roryEffectUntil = 0;
+  let roryHiddenUntil = 0;
+  let roryEffectSprites = [];
+  let mouse = { x: W * .55, y: H * .55 };
+  let wega, rorys, maltigi, urio, dolls = [];
+  let wasAudioStarted = false;
+  let lastHudUpdate = 0;
+
+  function resize() {
+    W = Math.max(320, innerWidth);
+    H = Math.max(240, innerHeight);
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * pixelRatio);
+    canvas.height = Math.round(H * pixelRatio);
+    canvas.style.width = '100vw';
+    canvas.style.height = '100vh';
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (mouse) { mouse.x = Math.min(mouse.x, W); mouse.y = Math.min(mouse.y, H); }
+    if (mode === 'playing') makeRoryEffectSprites();
+  }
+  addEventListener('resize', resize);
+
+  function rand(min, max) { return min + Math.random() * (max - min); }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function farSpot(minDistance = 190, avoid = mouse) {
+    let p = { x: W / 2, y: H / 2 };
+    for (let i = 0; i < 90; i++) {
+      const edge = Math.floor(Math.random() * 4);
+      if (edge === 0) p = { x: rand(40, W - 40), y: rand(60, H * .28) };
+      else if (edge === 1) p = { x: rand(40, W - 40), y: rand(H * .72, H - 50) };
+      else if (edge === 2) p = { x: rand(35, W * .25), y: rand(60, H - 60) };
+      else p = { x: rand(W * .75, W - 35), y: rand(60, H - 60) };
+      if (!avoid || distance(p, avoid) >= minDistance) return p;
+    }
+    return { x: W * .18, y: H * .18 };
+  }
+
+  function resetState() {
+    urioScreamPlayed = false;
+    totalCollected = 0;
+    dolls = [];
+    roryEffectUntil = 0;
+    roryHiddenUntil = 0;
+    roryEffectSprites = [];
+    const wp = farSpot(260, mouse);
+    wega = { x: wp.x, y: wp.y, hit: 58, speed: 235, angry: false };
+    rorys = { active: false, visible: false, x: -100, y: -100, hitW: 46, hitH: 54, nextTeleport: 0 };
+    urio = { active: false, x: -150, y: -150, hit: 54, speed: 410 };
+    maltigi = {
+      active: false, x: -200, y: -200, hit: 64,
+      phase: 'rest', timer: 0, dirX: 1, dirY: 0,
+      targetX: null, targetY: null,
+      protectUntil: 0, attackDuration: 1.15, attackSpeed: 610,
+      lineVisible: false
+    };
+    for (let i = 0; i < 40; i++) spawnDoll();
+    countEl.textContent = '0';
+    statusEl.textContent = 'WEGA IS WATCHING';
+    toast.style.display = 'none';
+    lastHudUpdate = 0;
+  }
+
+  function spawnDoll() {
+    // El total de dolls disponibles en toda la partida nunca supera 357:
+    // las recogidas + las que siguen en pantalla.
+    if (dolls.length >= 46 || totalCollected + dolls.length >= 357) return;
+    let p = { x: rand(26, W - 26), y: rand(45, H - 45) };
+    for (let i = 0; i < 40; i++) {
+      const candidate = { x: rand(26, W - 26), y: rand(45, H - 45) };
+      const tooNearWega = wega && distance(candidate, wega) < 75;
+      const tooNearMouse = distance(candidate, mouse) < 55;
+      if (!tooNearWega && !tooNearMouse) { p = candidate; break; }
+    }
+    dolls.push({ x: p.x, y: p.y, radius: 12 });
+  }
+
+  function makeRoryEffectSprites() {
+    roryEffectSprites = [];
+    // A crowd of Rorys fills the view; every sprite is bounded by the canvas.
+    for (let i = 0; i < 52; i++) {
+      const size = Math.min(rand(164, 224), Math.max(64, W - 8), Math.max(64, H - 8));
+      const angle = rand(0, Math.PI * 2);
+      const speed = rand(520, 860);
+      roryEffectSprites.push({
+        x: rand(4, Math.max(4, W - size - 4)),
+        y: rand(4, Math.max(4, H - size - 4)),
+        size,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        turnIn: rand(.08, .32),
+        alpha: rand(.22, .38),
+        rot: 0
+      });
+    }
+  }
+
+  function updateRoryEffectSprites(dt) {
+    if (!roryEffectSprites.length) return;
+    for (const s of roryEffectSprites) {
+      // Sudden turns, direction flips, and speed changes make the swarm chaotic.
+      s.turnIn -= dt;
+      if (s.turnIn <= 0) {
+        const speed = rand(520, 860);
+        const currentAngle = Math.atan2(s.vy, s.vx);
+        const angle = currentAngle + rand(-2.65, 2.65);
+        s.vx = Math.cos(angle) * speed;
+        s.vy = Math.sin(angle) * speed;
+        if (Math.random() < .22) {
+          s.vx *= -1;
+          s.vy *= -1;
+        }
+        s.turnIn = rand(.08, .32);
+      }
+
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+
+      // Bounce and clamp every frame so none of the Rory sprites can leave the viewport.
+      const maxX = Math.max(0, W - s.size);
+      const maxY = Math.max(0, H - s.size);
+      if (s.x <= 0) { s.x = 0; s.vx = Math.abs(s.vx); }
+      else if (s.x >= maxX) { s.x = maxX; s.vx = -Math.abs(s.vx); }
+      if (s.y <= 0) { s.y = 0; s.vy = Math.abs(s.vy); }
+      else if (s.y >= maxY) { s.y = maxY; s.vy = -Math.abs(s.vy); }
+      s.x = clamp(s.x, 0, maxX);
+      s.y = clamp(s.y, 0, maxY);
+    }
+  }
+
+  function showToast(text, duration = 2400) {
+    toast.textContent = text;
+    toast.style.display = 'block';
+    toastUntil = performance.now() + duration;
+  }
+
+  function startGame() {
+    mode = 'playing';
+    startScreen.style.display = 'none';
+    bg.style.display = 'block';
+    canvas.style.display = 'block';
+    hud.style.display = 'block';
+    loseOverlay.style.display = 'none';
+    mouse = { x: W * .55, y: H * .54 };
+    resetState();
+    winOverlay.style.display = 'none';
+    loseOverlay.style.display = 'none';
+    const p = farSpot(300, mouse);
+    wega.x = p.x; wega.y = p.y;
+    wasAudioStarted = true;
+    audio.loop = true;
+    audio.volume = 0.025;
+    audio.playbackRate = 1.12;
+    audio.play().catch(() => {});
+    if (winMusicAudio) { winMusicAudio.pause(); try { winMusicAudio.currentTime = 0; } catch (_) {} }
+    if (gameMusicAudio) {
+      gameMusicAudio.loop = true;
+      gameMusicAudio.volume = 0.25;
+      gameMusicAudio.play().catch(() => {});
+    }
+    lastTime = performance.now();
+  }
+
+  function returnToTitle() {
+    mode = 'title';
+    audio.pause();
+    if (gameMusicAudio) { gameMusicAudio.pause(); try { gameMusicAudio.currentTime = 0; } catch (_) {} }
+    if (winMusicAudio) { winMusicAudio.pause(); try { winMusicAudio.currentTime = 0; } catch (_) {} }
+    if (rorysScreamAudio) rorysScreamAudio.pause();
+    if (urioScreamAudio) { urioScreamAudio.pause(); try { urioScreamAudio.currentTime = 0; } catch (_) {} }
+    if (wegAlertAudio) wegAlertAudio.pause();
+    if (maltigiScreamAudio) maltigiScreamAudio.pause();
+    if (maltigiPiggyAudio) maltigiPiggyAudio.pause();
+    if (maltigiPingAudio) maltigiPingAudio.pause();
+    try { audio.currentTime = 0; } catch (_) {}
+    startScreen.style.display = 'flex';
+    bg.style.display = 'none';
+    canvas.style.display = 'none';
+    hud.style.display = 'none';
+    loseOverlay.style.display = 'none';
+    winOverlay.style.display = 'none';
+    toast.style.display = 'none';
+  }
+
+  function stopAllAudio() {
+    document.querySelectorAll('audio').forEach(sound => {
+      try { sound.pause(); sound.currentTime = 0; } catch (_) {}
+    });
+    roryEffectSoundActive = false;
+  }
+
+  function lose() {
+    if (mode !== 'playing') return;
+    mode = 'lost';
+    stopAllAudio();
+    // Urio's scream must remain disabled throughout the YOU LOSEGA screen.
+    if (urioScreamAudio) { urioScreamAudio.pause(); try { urioScreamAudio.currentTime = 0; } catch (_) {} }
+    audio.pause();
+    if (gameMusicAudio) gameMusicAudio.pause();
+    if (rorysScreamAudio) rorysScreamAudio.pause();
+    if (urioScreamAudio) { urioScreamAudio.pause(); try { urioScreamAudio.currentTime = 0; } catch (_) {} }
+    if (wegAlertAudio) wegAlertAudio.pause();
+    if (maltigiScreamAudio) maltigiScreamAudio.pause();
+    if (maltigiPiggyAudio) maltigiPiggyAudio.pause();
+    if (maltigiPingAudio) maltigiPingAudio.pause();
+    loseOverlay.style.display = 'flex';
+    winOverlay.style.display = 'none';
+    toast.style.display = 'none';
+  }
+
+  function winGame() {
+    if (mode !== 'playing') return;
+    mode = 'won';
+    stopAllAudio();
+    // Urio's scream must remain disabled throughout the YOU WINGA screen.
+    if (urioScreamAudio) { urioScreamAudio.pause(); try { urioScreamAudio.currentTime = 0; } catch (_) {} }
+    audio.pause();
+    if (gameMusicAudio) gameMusicAudio.pause();
+    if (winMusicAudio) { winMusicAudio.loop = true; winMusicAudio.volume = 0.25; winMusicAudio.currentTime = 0; winMusicAudio.play().catch(() => {}); }
+    [rorysScreamAudio, urioScreamAudio, wegAlertAudio, maltigiScreamAudio, maltigiPiggyAudio, maltigiPingAudio, rorysBlinsAudio, rorysGlitchAudio].forEach(sound => { if (sound) sound.pause(); });
+    loseOverlay.style.display = 'none';
+    winOverlay.style.display = 'flex';
+    toast.style.display = 'none';
+  }
+
+  function restartAfterLose() {
+    try {
+      location.reload();
+    } catch (_) {
+      returnToTitle();
+    }
+    // Fallback in browser contexts where reload is blocked or unavailable.
+    setTimeout(() => {
+      if (mode === 'lost') {
+        returnToTitle();
+        resetState();
+      }
+    }, 350);
+  }
+
+  function spawnRorys(debug = false) {
+    if (mode === 'title') startGame();
+    if (mode !== 'playing') return;
+    if (!rorys.active) {
+      const p = farSpot(230, mouse);
+      rorys.x = p.x; rorys.y = p.y;
+      rorys.active = true;
+      rorys.visible = true;
+      rorys.nextTeleport = performance.now() + 2600;
+    } else {
+      const p = farSpot(230, mouse);
+      rorys.x = p.x; rorys.y = p.y;
+      rorys.visible = true;
+      rorys.nextTeleport = performance.now() + 2600;
+    }
+    playSfx(rorysScreamAudio, 0.13);
+    if (debug) { showToast('RORYS HAS APPEARED', 1500); playSfx(wegAlertAudio, 0.12); }
+  }
+
+  function spawnMaltigi(debug = false) {
+    if (mode === 'title') startGame();
+    if (mode !== 'playing') return;
+    const p = farSpot(250, mouse);
+    maltigi.active = true;
+    maltigi.x = p.x; maltigi.y = p.y;
+    maltigi.phase = 'rest';
+    maltigi.timer = 0;
+    maltigi.dirX = 1; maltigi.dirY = 0;
+    maltigi.targetX = null; maltigi.targetY = null;
+    maltigi.protectUntil = performance.now() + 1700;
+    maltigi.lineVisible = false;
+    if (debug) showToast('MALTIGI SPAWNED SAFELY', 1500);
+  }
+
+  function spawnUrio(debug = false) {
+    if (mode === 'title') startGame();
+    if (mode !== 'playing') return;
+    const p = farSpot(260, mouse);
+    urio.active = true;
+    urio.x = p.x; urio.y = p.y;
+    // La alerta se dispara una sola vez al aparecer; el grito de Urio queda en bucle, como el de Wega.
+    if (!urioScreamPlayed) {
+      urioScreamPlayed = true;
+      playSfx(wegAlertAudio, 0.16);
+      if (urioScreamAudio) {
+        urioScreamAudio.loop = true;
+        urioScreamAudio.currentTime = 0;
+        urioScreamAudio.volume = 0.20;
+        urioScreamAudio.play().catch(() => {});
+      }
+    }
+    showToast(debug ? 'URIO SPAWNED (DEBUG)' : 'URIO IS COMING', 2400);
+    updateStatus();
+  }
+
+  function enrageWega(debug = false) {
+    if (mode === 'title') startGame();
+    if (mode !== 'playing') return;
+    if (wega && !wega.angry) {
+      showToast('WEGA IS ENRAGED', 2200);
+      playSfx(wegaEnrageAudio, 0.16);
+    }
+    wega.angry = true;
+    wega.speed = 372;
+    if (debug) updateStatus();
+  }
+
+  function updateStatus() {
+    if (totalCollected >= 186 || (wega && wega.angry)) statusEl.textContent = 'WEGA IS ENRAGED';
+    else if (maltigi && maltigi.active) statusEl.textContent = 'MALTIGI IS COMING';
+    else if (urio && urio.active) statusEl.textContent = 'URIO IS COMING';
+    else if (rorys && rorys.active) statusEl.textContent = 'RORYS IS COMING';
+    else statusEl.textContent = 'COLLECT WEGA DOLLS';
+  }
+
+  function checkProgress(now) {
+    // Urio aparece cuando quedan exactamente 100 Wega Dolls por recoger.
+    if (totalCollected >= 257 && !urio.active) {
+      spawnUrio(false);
+    }
+    if (totalCollected >= 125 && !rorys.active) {
+      spawnRorys(false);
+      showToast('RORYS IS COMING', 2200);
+      playSfx(wegAlertAudio, 0.14);
+    }
+    if (totalCollected >= 247 && !maltigi.active) {
+      spawnMaltigi(false);
+      showToast('MALTIGI IS COMING', 2200);
+      playSfx(wegAlertAudio, 0.12);
+      playSfx(maltigiScreamAudio, 0.11);
+      playSfx(maltigiPiggyAudio, 0.10);
+    }
+    if (totalCollected >= 186 && !wega.angry) {
+      enrageWega(false);
+    }
+    if (totalCollected >= 357) {
+      statusEl.textContent = 'ALL 357 WEGA DOLLS COLLECTED';
+    } else updateStatus();
+  }
+
+  function triggerRoryEffect(now) {
+    roryEffectUntil = now + 6000;
+    roryEffectSoundActive = true;
+    playTimedSfx(rorysBlinsAudio, 0.18, 6000);
+    playTimedSfx(rorysGlitchAudio, 0.18, 6000);
+    roryHiddenUntil = now + 8000;
+    if (rorys) rorys.visible = false;
+    makeRoryEffectSprites();
+    // El efecto de Rorys no muestra ningún aviso de texto en pantalla.
+  }
+
+  function updateMaltigi(dt, now) {
+    if (!maltigi.active) return;
+    maltigi.timer += dt;
+    if (maltigi.phase === 'rest') {
+      // Two-second pause: hide the line for the first second, show it for the second.
+      maltigi.lineVisible = maltigi.timer >= 1 && maltigi.timer < 2;
+      if (maltigi.timer >= 2) {
+        // Lock the exact cursor position at the start of preparation.
+        maltigi.targetX = clamp(mouse.x, 0, W);
+        maltigi.targetY = clamp(mouse.y, 0, H);
+        const dx = maltigi.targetX - maltigi.x;
+        const dy = maltigi.targetY - maltigi.y;
+        const len = Math.hypot(dx, dy) || 1;
+        maltigi.dirX = dx / len;
+        maltigi.dirY = dy / len;
+        maltigi.phase = 'aim';
+        maltigi.timer = 0;
+        maltigi.lineVisible = true;
+        playSfx(maltigiPingAudio, 0.12);
+      }
+    } else if (maltigi.phase === 'aim') {
+      // The target remains fixed even if the player moves the mouse.
+      maltigi.lineVisible = true;
+      if (maltigi.timer >= .8) {
+        maltigi.phase = 'attack';
+        maltigi.timer = 0;
+        playSfx(maltigiScreamAudio, 0.12);
+      }
+    } else if (maltigi.phase === 'attack') {
+      maltigi.lineVisible = true;
+      const dx = maltigi.targetX - maltigi.x;
+      const dy = maltigi.targetY - maltigi.y;
+      const len = Math.hypot(dx, dy);
+      const step = maltigi.attackSpeed * dt;
+      if (len <= Math.max(step, 1)) {
+        // Stop exactly where the mouse was when Maltigi started preparing.
+        maltigi.x = maltigi.targetX;
+        maltigi.y = maltigi.targetY;
+        maltigi.phase = 'rest';
+        maltigi.timer = 0;
+        maltigi.lineVisible = false;
+        maltigi.protectUntil = 0;
+      } else {
+        maltigi.x += (dx / len) * step;
+        maltigi.y += (dy / len) * step;
+      }
+    }
+  }
+
+  function update(dt, now) {
+    if (mode !== 'playing') return;
+    if (roryEffectSoundActive && now >= roryEffectUntil) {
+      roryEffectSoundActive = false;
+      playSfx(rorysOhAudio, 0.18);
+    }
+    if (now < roryEffectUntil) updateRoryEffectSprites(dt);
+    // Wega travels at a constant speed; the enlarged sprite does not affect the hitbox.
+    const dx = mouse.x - wega.x;
+    const dy = mouse.y - wega.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 0.001) {
+      const step = wega.speed * dt;
+      wega.x += (dx / len) * Math.min(step, len);
+      wega.y += (dy / len) * Math.min(step, len);
+    }
+
+    if (rorys.active) {
+      if (now >= roryHiddenUntil) rorys.visible = true;
+      else rorys.visible = false;
+      if (rorys.visible && now >= rorys.nextTeleport) {
+        const p = farSpot(210, mouse);
+        rorys.x = p.x; rorys.y = p.y;
+        playSfx(rorysScreamAudio, 0.13);
+        rorys.nextTeleport = now + rand(2400, 3600);
+      }
+    }
+
+    // Urio persigue el cursor un poco más rápido que Wega enfurecido (410 frente a 372).
+    if (urio && urio.active) {
+      const ux = mouse.x - urio.x, uy = mouse.y - urio.y;
+      const ulen = Math.hypot(ux, uy);
+      if (ulen > 0.001) {
+        const step = urio.speed * dt;
+        urio.x += (ux / ulen) * Math.min(step, ulen);
+        urio.y += (uy / ulen) * Math.min(step, ulen);
+      }
+    }
+
+    updateMaltigi(dt, now);
+
+    // Mouse is the player's position and can collect the dolls by crossing their invisible hitboxes.
+    for (let i = dolls.length - 1; i >= 0; i--) {
+      const d = dolls[i];
+      if (Math.hypot(mouse.x - d.x, mouse.y - d.y) <= d.radius + 10) {
+        dolls.splice(i, 1);
+        if (totalCollected < 357) totalCollected++;
+        countEl.textContent = String(totalCollected);
+        checkProgress(now);
+        if (totalCollected >= 357) { winGame(); return; }
+        spawnDoll();
+      }
+    }
+
+    // Rorys causes a six-second transparent overlay, not death. After triggering it, Rorys stays hidden for eight seconds before appearing again.
+    if (rorys.active && rorys.visible && Math.abs(mouse.x - rorys.x) <= rorys.hitW / 2 + 4 && Math.abs(mouse.y - rorys.y) <= rorys.hitH / 2 + 4) {
+      triggerRoryEffect(now);
+    }
+
+    // Collision checks use fixed, invisible hitboxes and are skipped during spawn protection.
+    if (Math.abs(mouse.x - wega.x) <= wega.hit / 2 && Math.abs(mouse.y - wega.y) <= wega.hit / 2) {
+      lose(); return;
+    }
+    if (maltigi.active && now >= maltigi.protectUntil && Math.abs(mouse.x - maltigi.x) <= maltigi.hit / 2 && Math.abs(mouse.y - maltigi.y) <= maltigi.hit / 2) {
+      lose(); return;
+    }
+    if (urio && urio.active && Math.abs(mouse.x - urio.x) <= urio.hit / 2 && Math.abs(mouse.y - urio.y) <= urio.hit / 2) {
+      lose(); return;
+    }
+
+    if (toast.style.display !== 'none' && now >= toastUntil) toast.style.display = 'none';
+    if (now - lastHudUpdate > 250) {
+      lastHudUpdate = now;
+    }
+  }
+
+  function drawImageFit(name, x, y, boxW, boxH, alpha = 1, rotation = 0) {
+    const im = images[name];
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    if (rotation) ctx.rotate(rotation);
+    if (im && im.complete && im.naturalWidth > 0) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      const ratio = Math.min(boxW / im.naturalWidth, boxH / im.naturalHeight);
+      const iw = im.naturalWidth * ratio, ih = im.naturalHeight * ratio;
+      ctx.drawImage(im, -iw / 2, -ih / 2, iw, ih);
+    } else {
+      ctx.font = `bold ${Math.max(32, Math.min(boxW, boxH) * .8)}px Arial`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const fallback = name === 'wega' || name === 'wegaAngry' ? '🟣' : name === 'rorys' ? '🔵' : name === 'maltigi' || name === 'maltigiRest' ? '🟢' : '💜';
+      ctx.fillText(fallback, 0, 0);
+    }
+    ctx.restore();
+  }
+
+  // Dibuja un sprite con ancho y alto exactos, estirándolo horizontalmente si hace falta.
+  // Solo se usa para la apariencia de Maltigi al apuntar/atacar; su hitbox no cambia.
+  function drawImageStretched(name, x, y, drawW, drawH, alpha = 1) {
+    const im = images[name];
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (im && im.complete && im.naturalWidth > 0) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(im, x - drawW / 2, y - drawH / 2, drawW, drawH);
+    } else {
+      ctx.font = `bold ${Math.max(32, Math.min(drawW, drawH) * .8)}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🟢', x, y);
+    }
+    ctx.restore();
+  }
+
+  function rayEndpoint(x, y, dx, dy) {
+    let t = Infinity;
+    if (dx > 0) t = Math.min(t, (W - x) / dx);
+    if (dx < 0) t = Math.min(t, (0 - x) / dx);
+    if (dy > 0) t = Math.min(t, (H - y) / dy);
+    if (dy < 0) t = Math.min(t, (0 - y) / dy);
+    if (!Number.isFinite(t) || t < 0) t = Math.max(W, H);
+    return { x: x + dx * t, y: y + dy * t };
+  }
+
+  function drawMaltigiLine() {
+    if (!maltigi.active || !maltigi.lineVisible || (maltigi.phase === 'rest' && maltigi.timer < 1)) return;
+    let end;
+    if (maltigi.phase === 'rest') {
+      // During the visible second of rest, the line tracks the live cursor.
+      let dx = mouse.x - maltigi.x;
+      let dy = mouse.y - maltigi.y;
+      const length = Math.hypot(dx, dy) || 1;
+      dx /= length; dy /= length;
+      end = rayEndpoint(maltigi.x, maltigi.y, dx, dy);
+    } else {
+      // During preparation and attack, draw the locked path to the saved target.
+      end = { x: maltigi.targetX ?? (maltigi.x + maltigi.dirX * W), y: maltigi.targetY ?? (maltigi.y + maltigi.dirY * H) };
+    }
+    ctx.save();
+    ctx.strokeStyle = '#f00000'; ctx.lineWidth = 4; ctx.globalAlpha = .95;
+    ctx.beginPath(); ctx.moveTo(maltigi.x, maltigi.y); ctx.lineTo(end.x, end.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw(now) {
+    if (mode !== 'playing' && mode !== 'lost') return;
+    ctx.clearRect(0, 0, W, H);
+    // Dolls have visible artwork but their circular 12px collection hitboxes are invisible.
+    for (const d of dolls) drawImageFit('doll', d.x, d.y, 42, 42);
+
+    if (rorys.active && rorys.visible && now >= roryHiddenUntil) drawImageFit('rorys', rorys.x, rorys.y, 76, 86);
+    if (urio && urio.active) drawImageFit('urio', urio.x, urio.y, 86, 94);
+    drawMaltigiLine();
+    // Character sprites are purely visual; the hitbox stays 58x58 for Wega and 64x64 for Maltigi.
+    drawImageFit(wega.angry ? 'wegaAngry' : 'wega', wega.x, wega.y, wega.angry ? 82 : 90, 90);
+
+    if (maltigi.active) {
+      if (maltigi.phase === 'rest') {
+        // During the 2-second rest, use the Sadmaltigi image.
+        drawImageFit('maltigiRest', maltigi.x, maltigi.y, 64, 64);
+      } else if (maltigi.phase === 'aim') {
+        // Keep Maltigi.png visible while preparing to attack.
+        // It uses the slightly slimmer 44x64 visual dimensions shared with the attack sprite.
+        drawImageStretched('maltigi', maltigi.x, maltigi.y, 44, 64);
+      } else if (maltigi.phase === 'attack') {
+        // Keep Maltigi.png visible during the attack at the same slightly slimmer 44x64 size.
+        drawImageStretched('maltigi', maltigi.x, maltigi.y, 44, 64);
+      }
+    }
+
+    // Cryingshoe covers the screen within 300 px of Wega. As the cursor gets
+    // closer, opacity rises from 34% to 80% (it always remains at least 20% transparent).
+    // The cached purple-tinted copy affects only this image. Rorys are drawn after it.
+    const wegaDistance = distance(mouse, wega);
+    const cryingImage = images.cryingShoePurple || images.cryingShoe;
+    if (cryingImage && cryingImage.complete !== false &&
+        (cryingImage.naturalWidth || cryingImage.width) > 0 && wegaDistance <= 300) {
+      const proximity = 1 - clamp(wegaDistance / 300, 0, 1);
+      const cryingOpacity = 0.34 + proximity * 0.46; // max 80% opacity = min 20% transparency
+      ctx.save();
+      ctx.globalAlpha = cryingOpacity;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      // Fallback violet filter if the tinted offscreen canvas couldn't be created.
+      if (cryingImage === images.cryingShoe) ctx.filter = 'brightness(0.68) sepia(0.85) hue-rotate(245deg) saturate(2.8)';
+      ctx.drawImage(cryingImage, 0, 0, W, H);
+      ctx.restore();
+    }
+
+    // Many large semi-transparent Rorys are overlaid while preserving full visibility of the game.
+    if (now < roryEffectUntil) {
+      ctx.save();
+      for (const s of roryEffectSprites) drawImageFit('rorys', s.x + s.size / 2, s.y + s.size / 2, s.size, s.size, s.alpha, s.rot);
+      ctx.restore();
+    }
+  }
+
+  function frame(now) {
+    if (!lastTime) lastTime = now;
+    const dt = Math.min((now - lastTime) / 1000, .05);
+    lastTime = now;
+    if (mode === 'playing') {
+      update(dt, now);
+      // Volume capped at 12%; closer to Wega is louder. Playback is slightly faster than original.
+      const d = distance(mouse, wega);
+      const proximity = 1 - clamp(d / Math.max(W, H) * 1.5, 0, 1);
+      audio.volume = clamp(.0015 + proximity * .0435, 0, .045);
+      audio.playbackRate = 1.12;
+      if (urio && urio.active && urioScreamAudio) {
+        const ud = distance(mouse, urio);
+        const urioProximity = 1 - clamp(ud / Math.max(W, H) * 1.5, 0, 1);
+        urioScreamAudio.volume = clamp(0.045 + urioProximity * 0.155, 0.045, 0.20);
+        urioScreamAudio.playbackRate = 1.0;
+        if (urioScreamAudio.paused) urioScreamAudio.play().catch(() => {});
+      }
+    }
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function eventPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: clamp(e.clientX - rect.left, 0, W), y: clamp(e.clientY - rect.top, 0, H) };
+  }
+  addEventListener('mousemove', e => { mouse = eventPoint(e); });
+  addEventListener('pointermove', e => { mouse = eventPoint(e); });
+  startScreen.addEventListener('click', () => { if (mode === 'title') startGame(); });
+
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.key === ' ') {
+      if (mode === 'title') { e.preventDefault(); startGame(); return; }
+      if (mode === 'lost' || mode === 'won') { e.preventDefault(); restartAfterLose(); return; }
+    }
+  });
+
+  startImage.addEventListener('error', () => {
+    startImage.style.display = 'none';
+    startFallback.style.display = 'block';
+  });
+  startImage.addEventListener('load', () => {
+    startImage.style.display = 'block';
+    startFallback.style.display = 'none';
+  });
+
+  // Initialize dimensions and show a usable start screen even if remote images fail.
+  resize();
+  if (audio) { audio.volume = 0; audio.playbackRate = 1.12; }
+  if (urioScreamAudio) {
+    urioScreamAudio.loop = true; urioScreamAudio.volume = 0.20;
+    // Repite únicamente los primeros 4 segundos del grito.
+    urioScreamAudio.addEventListener('timeupdate', () => {
+      if (mode !== 'playing') {
+        urioScreamAudio.pause();
+        try { urioScreamAudio.currentTime = 0; } catch (_) {}
+        return;
+      }
+      if (!urioScreamAudio.paused && urioScreamAudio.currentTime >= 4) {
+        try { urioScreamAudio.currentTime = 0; } catch (_) {}
+      }
+    });
+  }
+  if (rorysScreamAudio) rorysScreamAudio.volume = 0.13;
+  if (wegAlertAudio) wegAlertAudio.volume = 0.12;
+  if (maltigiScreamAudio) maltigiScreamAudio.volume = 0.11;
+  if (maltigiPiggyAudio) maltigiPiggyAudio.volume = 0.10;
+  if (maltigiPingAudio) maltigiPingAudio.volume = 0.12;
+  if (gameMusicAudio) { gameMusicAudio.volume = 0.25; gameMusicAudio.loop = true; }
+  if (winMusicAudio) { winMusicAudio.volume = 0.25; winMusicAudio.loop = true; }
+})();
+</script>
+</body>
+</html>
